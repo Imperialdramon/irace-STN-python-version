@@ -29,6 +29,20 @@ def read_trajectories_files_folder(
     return file_paths
 
 
+# REVISAR POSIBLE CONSIDERACIÓN PARA LOS VALORES, DADO QUE NO TIENEN EL FORMATO STN PROPIAMENTE TAL (YA QUE LAS STN SON CONTINUAS Y EN EL ARCHIVO GENERADO POR DIANA NO SON DEL TODO CONTINUAS)
+# Ej: id1 calidad1 sol1 id2 calidad2 sol2
+#     1   0.5      1    2   0.6      2
+#     1   0.5      1    3   0.7      3
+# Este es el formato dado que toma élites y no élites, de esta forma no queda directamente con la forma de STN y necesita interpretarse correctamente.
+
+
+# AGREGAR VALIDACIÓN DE QUE LOS RANGOS SEAN EQUIVALENTES EN LAS LOCACIONES AL FORMATO DE PARÁMETROS
+
+# CALCULAR LA MEDIA DE LA CALIDAD PARA LAS CONFIGURACIONES PARA PODER REALIZAR LOS VALORES DE LOS PARÁMETROS
+# VER CUANDO CALCULAR LA CALIDAD DE LAS SOLUCIONES -> CONFIGURACIONES POSTERIOR A CARGARLAS TODAS
+
+# LA CONFIGURACIÓN REPRESENTATIVA DEBE SER LA DE MEJOR CALIDAD (ALTERNATIVAMENTE LA DE LA MEDIA EN UNA LOCACIÓN)
+
 # Función para convertir las trayectorias en formato STN con vecindades
 def trajectories_to_stn_format(
     folder_path: str,
@@ -133,5 +147,5 @@ def trajectories_to_stn_format(
     stn_format_files = []
 
     # Recorre todas las filas de trayectorias y hace el procesamiento al formato STN con las vecindades
-
+    
     return stn_format_files

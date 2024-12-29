@@ -144,6 +144,7 @@ class Trajectory:
             destination_iteration: Iteración de la configuración de destino
             destination_value: Valor de la configuración de destino
         """
+        self.trajectory_iteration = trajectory_iteration
         self.origin_id = origin_id
         self.origin_parameters = origin_parameters if origin_parameters is not None else []
         self.origin_value = origin_value
@@ -244,7 +245,9 @@ class Trajectory:
             destination_node += f"{parameter.get_value()}" # MODIFICAR: USAR ALGÚN TIPO DE FORMATO MÁS ESTANDAR
         return f"{trajectory_iteration} {origin_value:.4f} {origin_node} {destination_value:.4f} {destination_node}"
 
-class Neighborhood: # MODIFICAR: DEFINIR UN FORMATO DE LA CLASE QUE RESULTE UTIL PARA LA DEFINICIÓN DE VECINDARIO
+class Neighborhood:
+
+# MODIFICAR: DEFINIR UN FORMATO DE LA CLASE QUE RESULTE UTIL PARA LA DEFINICIÓN DE VECINDARIO
 # RECORDANDO QUE SE DEBE OBTENER EL MÁXIMO VALOR Y OTROS VALORES DE INTERÉS -> REPRESENTATIVO DE LA CLASE
 # PROBABLEMENTE HACER ALGO ASÍ COMO UNA LISTA SIMILAR A LA DE TRAJECTORY PERO QUE ME INDIQUE CUAL ES LA ACTUAL Y CUAL ES LA REPRESENTADA, ETC
     """
