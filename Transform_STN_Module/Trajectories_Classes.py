@@ -1,11 +1,4 @@
 class Parameter:
-    """
-    Clase para definir un parámetro.
-    
-    Attributes:
-        name: Nombre del parámetro
-        value: Valor del parámetro
-    """
     # Constructor de la clase
     def __init__(self, name: str, value: str | int | float):
         """
@@ -35,15 +28,6 @@ class Parameter:
         self.value = value
 
 class Parameter_Format:
-    """
-    Clase para definir el formato de un parámetro.
-    
-    Attributes:
-        name: Nombre del parámetro
-        type: Tipo del parámetro (string -> s, integer -> i, float -> f)
-        value_type: Tipo de los valores del parámetro (categorical -> c, numerical (real|integer) -> r | i, ordinal -> o)
-        possible_values: Valores posibles del parámetro (lista de strings, enteros o flotantes)
-    """
     # Constructor de la clase
     def __init__(self, name: str = "", type: str = "", value_type: str = "", possible_values: list[str | int | float] = []):
         """
@@ -71,6 +55,10 @@ class Parameter_Format:
     # Método para obtener los valores posibles del parámetro
     def get_type(self) -> str:
         return self.type
+    
+    # Método para obtener el tipo de los valores del parámetro
+    def get_value_type(self) -> str:
+        return self.value_type
 
     # Método para obtener los valores posibles del parámetro
     def get_possible_values(self) -> list[str | int | float]:
@@ -84,213 +72,259 @@ class Parameter_Format:
     def set_type(self, type: str):
         self.type = type
 
+    # Método para establecer el tipo de los valores del parámetro
+    def set_value_type(self, value_type: str):
+        self.value_type = value_type
+
     # Método para establecer los valores posibles del parámetro
     def set_possible_values(self, possible_values: list[str | int | float]):
         self.possible_values = possible_values
 
     # Método para obtener el valor de un parámetro en el formato correcto
-    def cast_parameter_value(self, parameter_value: str) -> str | int | float:
-        if self.type == "s":
-            return parameter_value
-        elif self.type == "i":
-            return int(parameter_value)
-        elif self.type == "f":
-            return float(parameter_value)
-        else:
-            return None
+    def cast_parameter_value(self, parameter: Parameter) -> str | int | float:
+        try:
+            # Verifica si el nombre del parámetro coincide
+            if parameter.get_name() != self.name:
+                raise ValueError(f"El nombre del parámetro {parameter.get_name()} no coincide con {self.name}")
 
-    # Método para validar el valor de un parámetro
-    def validate_parameter_value(self, parameter: Parameter) -> bool:
-        if parameter.get_name() != self.name:
-            print(f"Error de parámetro")
-            return False
-        value = parameter.get_value()
-        if self.type == "s" and (self.value_type == "c" or self.value_type == "o"):
-            return value in self.possible_values
-        elif (self.type == "i" or self.type == "f") and (self.value_type == "r" or self.value_type == "i"):
-            return self.possible_values[0] <= value <= self.possible_values[1]
-        else:
-            print(f"Error de tipo de parámetro")
-            return False
+            value = parameter.get_value()
 
-class Trajectory:
+            # Parámetro string
+            if self.type == 's':
+
+                value = str(value)
+
+                # Verifica si el valor está en los valores posibles
+                if self.value_type in ['c', 'o'] and value not in self.possible_values:
+                    raise ValueError(f"El valor {value} no está en los valores posibles del parámetro {self.name}")
+
+                return value
+
+            # Parámetro entero
+            elif self.type == "i":
+
+                value = int(value)
+
+                # Verifica si el valor está en los valores posibles
+                if self.value_type in ['c', 'o'] and value not in self.possible_values:
+                    raise ValueError(f"El valor {value} no está en los valores posibles del parámetro {self.name}")
+
+                # Verifica si el valor está en el rango de valores posibles
+                elif self.value_type in ['r', 'i'] and not (value >= self.possible_values[0] and value <= self.possible_values[1]):
+                    raise ValueError(f"El valor {value} no está en el rango de valores posibles del parámetro {self.name}")
+
+                return value
+
+            # Parámetro flotante
+            elif self.type == "f":
+
+                value = float(value)
+
+                # Verifica si el valor está en los valores posibles
+                if self.value_type in ['c', 'o'] and value not in self.possible_values:
+                    raise ValueError(f"El valor {value} no está en los valores posibles del parámetro {self.name}")
+
+                # Verifica si el valor está en el rango de valores posibles
+                elif self.value_type in ['r', 'i'] and not (value >= self.possible_values[0] and value <= self.possible_values[1]):
+                    raise ValueError(f"El valor {value} no está en el rango de valores posibles del parámetro {self.name}")
+
+                return value
+            else:
+                raise ValueError(f"Tipo no soportado: {self.type}")
+        except ValueError as e:
+            raise ValueError(f"Error en el casteo de parámetro '{parameter.get_name()}': {e}")
+
+class Location_Format:
     """
-    Clase para definir una configuración.
+    Clase para definir el formato de un parámetro.
     
     Attributes:
-        trajectory_iteration: Identificador de la iteración a la que pertenece la trayectoria
-        origin_id: Identificador de la configuración de origen
-        origin_parameters: Parámetros de la configuración de origen
-        origin_iteration: Iteración de la configuración de origen
-        origin_value: Valor de la configuración de origen
-        destination_id: Identificador de la configuración de destino
-        destination_parameters: Parámetros de la configuración de destino
-        destination_iteration: Iteración de la configuración de destino
-        destination_value: Valor de la configuración de destino
+        name: Nombre del parámetro
+        location_caster: Diccionario con los valores de casteo de locación para categorías y ordinales o lista con el valor que los subrangos de valores numéricos y la significancia
     """
-    # Constructor de la clase Configuration
-    def __init__(self, trajectory_iteration: int = 0, origin_id: int = 0, origin_parameters: list[Parameter] = [], origin_iteration: int = 0, origin_value: int | float = 0, destination_id: int = 0, destination_parameters: list[Parameter] = [], destination_iteration: int = 0, destination_value: int | float = 0):
+    # Constructor de la clase
+    def __init__(self, name: str = "", location_caster: dict[str] | list[int | float] = {} ):
+        self.name = name
+        self.location_caster = location_caster
+    
+    # Método para obtener el nombre del parámetro
+    def get_name(self) -> str:
+        return self.name
+
+    # Método para obtener los valores de casteo de locación del parámetro
+    def get_location_caster(self) -> dict[str] | list[int | float]:
+        return self.location_caster
+
+    # Método para establecer el nombre del parámetro
+    def set_name(self, name: str):
+        self.name = name
+
+    # Método para establecer los valores de casteo de locación del parámetro
+    def set_location_caster(self, location_caster: dict[str] | list[int | float]):
+        self.location_caster = location_caster
+
+    # Método para obtener el valor de un parámetro en el formato correcto
+    def locate_parameter(self, parameter: Parameter, parameter_format: Parameter_Format) -> str:
+        try:
+            # Verifica si el nombre del parámetro coincide
+            if parameter.get_name() != self.name:
+                raise ValueError(f"El nombre del parámetro {parameter.get_name()} no coincide con {self.name}")
+
+            # Verifica si el formato del parámetro coincide
+            elif parameter_format.get_name() != self.name:
+                raise ValueError(f"El nombre del parámetro {parameter_format.get_name()} no coincide con {self.name}")
+
+            value = parameter.get_value()
+            parameter_located = ''
+
+            # Parámetro categorico u ordinal (c|o)
+            if parameter_format.get_value_type() in ['c', 'o']:
+
+                # Verifica si el casteador de locación es un diccionario
+                if not isinstance(self.location_caster, dict):
+                    raise ValueError(f"El formato de locación no es un diccionario para el parámetro {self.name}")
+
+                # Verifica si el valor está en los valores posibles
+                elif value not in self.location_caster.keys():
+                    raise ValueError(f"El valor {value} no está en los valores posibles del parámetro {self.name}")
+
+                parameter_located = str(self.location_caster[value])
+
+                return parameter_located
+
+            # Parámetro numérico (real|entero) (r|i)
+            elif parameter_format.get_value_type() in ['r', 'i']:
+
+                # Verifica que el casteador sea del tipo correcto
+                if not isinstance(self.location_caster, list):
+                    raise ValueError(f"El formato de locación no es una lista para el parámetro {self.name}")
+
+                # Verifica que el casteador tenga dos elementos
+                if not len(self.location_caster) == 2:
+                    raise ValueError(f"El formato de locación no tiene dos elementos para el parámetro {self.name} (subrango, significancia)")
+
+                lower_bound, upper_bound = parameter_format.get_possible_values()
+                division, significance = self.location_caster
+
+                # Verifica que el casteador permita particionar el rango de valores
+                if division >= upper_bound - lower_bound:
+                    raise ValueError(f"El formato de locación no permite particionar el rango de valores para el parámetro {self.name}")
+
+                # Verifica que la significancia sea un entero positivo
+                if not isinstance(significance, int) or significance < 0:
+                    raise ValueError(f"La significancia no es un entero positivo para el parámetro {self.name} (location_caster = {division, significance})")
+
+                # Calcula el subrango en el que se encuentra el valor (función piso)
+                subrange_index = int((value - lower_bound) // division)
+                calculated_value = lower_bound + subrange_index * division
+
+                # Aplica la significancia
+                if significance == 0:
+                    parameter_located = str(int(calculated_value)) # Convertir a entero si significance es 0
+                else:
+                    parameter_located = f"{calculated_value:.{significance}f}"  # Mantener decimales según significance
+
+                return parameter_located
+            else:
+                raise ValueError(f"Tipo no soportado: {parameter_format.get_value_type()}")
+        except ValueError as e:
+            raise ValueError(f"Error en el casteo de parámetro '{parameter.get_name()}': {e}")
+
+class Configuration:
+    # Clase para definir una configuración.
+    def __init__(self, id: int = 0, run: int = 0, iteration: int = 0, parameters: list[Parameter] = [], elite_state : str = '', quality: int | float = 0, location_code: str = ""):
         """
         Constructor de la clase Configuration.
         
         Args:
-            trajectory_iteration: Identificador de la iteración a la que pertenece la trayectoria
-            origin_id: Identificador de la configuración de origen
-            origin_parameters: Parámetros de la configuración de origen
-            origin_iteration: Iteración de la configuración de origen
-            origin_value: Valor de la configuración de origen
-            destination_id: Identificador de la configuración de destino
-            destination_parameters: Parámetros de la configuración de destino
-            destination_iteration: Iteración de la configuración de destino
-            destination_value: Valor de la configuración de destino
+            id: Identificador de la configuración
+            run: Número de ejecución
+            iteration: Número de iteración
+            parameters: Parámetros de la configuración
+            elite_state: Estado de la configuración en la elite (ne|e) -> (no elite|elite)
+            quality: Calidad de la configuración
+            location_code: Código de la locación de la configuración
         """
-        self.trajectory_iteration = trajectory_iteration
-        self.origin_id = origin_id
-        self.origin_parameters = origin_parameters if origin_parameters is not None else []
-        self.origin_value = origin_value
-        self.destination_id = destination_id
-        self.destination_parameters = destination_parameters if destination_parameters is not None else []
-        self.destination_value = destination_value
+        self.id = id
+        self.run = run
+        self.iteration = iteration
+        self.parameters = parameters if parameters is not None else []
+        self.elite_state = elite_state
+        self.quality = quality
+        self.location_code = location_code
+    
+    # Método para obtener el identificador de la configuración
+    def get_id(self) -> int:
+        return self.id
+    
+    # Método para obtener el número de ejecución
+    def get_run(self) -> int:
+        return self.run
+    
+    # Método para obtener el número de iteración
+    def get_iteration(self) -> int:
+        return self.iteration
+    
+    # Método para obtener los parámetros de la configuración
+    def get_parameters(self) -> list[Parameter]:
+        return self.parameters
+    
+    # Método para obtener el estado de la configuración en la elite
+    def get_elite_state(self) -> str:
+        return self.elite_state
+    
+    # Método para obtener la calidad de la configuración
+    def get_quality(self) -> int | float:
+        return self.quality
+    
+    # Método para establecer el identificador de la configuración
+    def set_id(self, id: int):
+        self.id = id
 
-    # Método para obtener el identificador de la iteración de la trayectoria
-    def get_trajectory_iteration(self) -> int:
-        return self.trajectory_iteration
-
-    # Método para obtener el identificador de la configuración de origen
-    def get_origin_id(self) -> int:
-        return self.origin_id
-    
-    # Método para obtener los parámetros de la configuración de origen
-    def get_origin_parameters(self) -> list[Parameter]:
-        return self.origin_parameters
-
-    # Método para obtener la iteración de la configuración de origen
-    def get_origin_iteration(self) -> int:
-        return self.origin_iteration
-    
-    # Método para obtener el valor de la configuración de origen
-    def get_origin_value(self) -> int | float:
-        return self.origin_value
-    
-    # Método para obtener el identificador de la configuración de destino
-    def get_destination_id(self) -> int:
-        return self.destination_id
-    
-    # Método para obtener los parámetros de la configuración de destino
-    def get_destination_parameters(self) -> list[Parameter]:
-        return self.destination_parameters
-    
-    # Método para obtener la iteración de la configuración de destino
-    def get_destination_iteration(self) -> int:
-        return self.destination_iteration
-    
-    # Método para obtener el valor de la configuración de destino
-    def get_destination_value(self) -> int | float:
-        return self.destination_value
-
-    # Método para establecer el identificador de la iteración de la trayectoria
-    def set_trajectory_iteration(self, trajectory_iteration: int):
-        self.trajectory_iteration = trajectory_iteration
-
-    # Método para establecer el identificador de la configuración de origen
-    def set_origin_id(self, origin_id: int):
-        self.origin_id = origin_id
-    
-    # Método para establecer los parámetros de la configuración de origen
-    def set_origin_parameters(self, origin_parameters: list[Parameter]):
-        self.origin_parameters = origin_parameters
-    
-    # Método para establecer la iteración de la configuración de origen
-    def set_origin_iteration(self, origin_iteration: int):
-        self.origin_iteration = origin_iteration
-    
-    # Método para establecer el valor de la configuración de origen
-    def set_origin_value(self, origin_value: int | float):
-        self.origin_value = origin_value
+    # Método para establecer el número de ejecución
+    def set_run(self, run: int):
+        self.run = run
         
-    # Método para establecer el identificador de la configuración de destino
-    def set_destination_id(self, destination_id: int):
-        self.destination_id = destination_id
+    # Método para establecer el número de iteración
+    def set_iteration(self, iteration: int):
+        self.iteration = iteration
     
-    # Método para establecer los parámetros de la configuración de destino
-    def set_destination_parameters(self, destination_parameters: list[Parameter]):
-        self.destination_parameters = destination_parameters
+    # Método para establecer los parámetros de la configuración
+    def set_parameters(self, parameters: list[Parameter]):
+        self.parameters = parameters
     
-    # Método para establecer la iteración de la configuración de destino
-    def set_destination_iteration(self, destination_iteration: int):
-        self.destination_iteration = destination_iteration
-
-    # Método para establecer el valor de la configuración de destino
-    def set_destination_value(self, destination_value: int | float):
-        self.destination_value = destination_value
+    # Método para establecer el estado de la configuración en la elite
+    def set_elite_state(self, elite_state: str):
+        self.elite_state = elite_state
     
-    # Método para añadir un parámetro a la configuración de origen
-    def add_origin_parameter(self, parameter: Parameter):
-        self.origin_parameters.append(parameter)
+    # Método para establecer la calidad de la configuración
+    def set_quality(self, quality: int | float):
+        self.quality = quality
     
-    # Método para añadir un parámetro a la configuración de destino
-    def add_destination_parameter(self, parameter: Parameter):
-        self.destination_parameters.append(parameter)
+    # Método para añadir un parámetro a la configuración
+    def add_parameter(self, parameter: Parameter):
+        self.parameters.append(parameter)
     
-    # Método para obtener la representación de la clase como string
-    def to_stn_format(self) -> str:
-        trajectory_iteration = self.trajectory_iteration
-        origin_value = self.origin_value
-        origin_node = ""
-        for parameter in self.origin_parameters:
-            origin_node += f"{parameter.get_value()}" # MODIFICAR: USAR ALGÚN TIPO DE FORMATO MÁS ESTANDAR
-        destination_value = self.destination_value
-        destination_node = ""
-        for parameter in self.destination_parameters:
-            destination_node += f"{parameter.get_value()}" # MODIFICAR: USAR ALGÚN TIPO DE FORMATO MÁS ESTANDAR
-        return f"{trajectory_iteration} {origin_value:.4f} {origin_node} {destination_value:.4f} {destination_node}"
-
-class Neighborhood:
-
-# MODIFICAR: DEFINIR UN FORMATO DE LA CLASE QUE RESULTE UTIL PARA LA DEFINICIÓN DE VECINDARIO
-# RECORDANDO QUE SE DEBE OBTENER EL MÁXIMO VALOR Y OTROS VALORES DE INTERÉS -> REPRESENTATIVO DE LA CLASE
-# PROBABLEMENTE HACER ALGO ASÍ COMO UNA LISTA SIMILAR A LA DE TRAJECTORY PERO QUE ME INDIQUE CUAL ES LA ACTUAL Y CUAL ES LA REPRESENTADA, ETC
-    """
-    Clase para definir una vecindad de un parámetro.
-    
-    Attributes:
-        parameter_name: Nombre del parámetro
-        neighborhood: Vecindad del parámetro
-    """
-    # Constructor de la clase
-    def __init__(self, name: str = "", neighborhood: dict[str, str] = {}):
-        """
-        Constructor de la clase Neighborhood.
-        
-        Args:
-            name: Nombre del parámetro
-            neighborhood: Vecindad del parámetro
-        """
-        self.parameter_name = name
-        self.neighborhood = neighborhood # MODIFICAR: USAR ALGÚN TIPO DE FORMATO MÁS ESTANDAR Y FUNCIONAL
     # Método para obtener la representación de la clase como string
     def __repr__(self):
-        return f"Parameter: {self.parameter_name} - Neighborhood: {self.neighborhood}"
-
-    # Método para obtener el nombre de la vecindad
-    def get_parameter_name(self) -> str:
-        return self.parameter_name
-
-    # Método para obtener la vecindad
-    def get_neighborhood(self) -> dict[str, str]:
-        return self.neighborhood
-
-    # Método para establecer el nombre de la vecindad
-    def set_parameter_name(self, parameter_name: str):
-        self.parameter_name = parameter_name
-
-    # Método para establecer la vecindad
-    def set_neighborhood(self, neighborhood: dict[str, str]):
-        self.neighborhood = neighborhood
+        return f"ID: {self.id} - Run: {self.run} - Iteration: {self.iteration} - Parameters: {self.parameters} - Quality: {self.quality}"
     
-    def get_parameter_node(self, parameter: Parameter, parameter_format: Parameter_Format) -> str:
-        if parameter.get_name() != self.parameter_name or parameter_format.get_name() != self.parameter_name:
-            print(f"Error de parámetro o formato de parámetro")
-            return None
-        return "Test"
+    # Método para generar el código de la locación de la configuración
+    def generate_location_code(self, parameters_format: list[Parameter_Format], locations_format: list[Location_Format]) -> str:
+        try:
+            # Verifica si el número de parámetros coincide con el número de formatos de locación
+            if len(locations_format) != len(self.parameters):
+                raise ValueError("Error en el número de parámetros al generar el código de la locación")
+            elif len(parameters_format) != len(self.parameters):
+                raise ValueError("Error en el número de formatos de parámetros al generar el código de la locación")
+
+            # Genera el código de la locación
+            location_code = ''
+            for i, location_format in enumerate(locations_format):
+                location_code += location_format.locate_parameter(self.parameters[i], parameters_format[i])
+
+            self.location_code = location_code
+            return location_code
+        except ValueError as e:
+            raise ValueError(f"Error al generar el código de la locación: {e}")
 
