@@ -248,9 +248,9 @@ def trajectories_to_stn_format(
         # Lista de archivos en formato STN
         stn_format_files = []
         if show_elites:
-            stn_format_files.append("Run Fitness1 Quality1 Location1 Elite1 Fitness2 Quality2 Location2 Elite2")
+            stn_format_files.append("Run Fitness1 Location1 Elite1 Fitness2 Location2 Elite2")
         else:
-            stn_format_files.append("Run Fitness1 Quality1 Location1 Fitness2 Quality2 Location2")
+            stn_format_files.append("Run Fitness1 Location1 Fitness2 Location2")
 
         # Se realiza la creación de la lista en formato STN
         for file_index, iterations_trajectory_list in enumerate(files_iterations_trajectory_list):
