@@ -1,6 +1,6 @@
 class Parameter:
     # Constructor de la clase
-    def __init__(self, name: str, value: str | int | float):
+    def __init__(self, name: str, value: str | int | float | None):
         """
         Constructor de la clase Parameter.
         
@@ -16,7 +16,7 @@ class Parameter:
         return self.name
 
     # Método para obtener el valor del parámetro
-    def get_value(self) -> str | int | float:
+    def get_value(self) -> str | int | float | None:
         return self.value
 
     # Método para establecer el nombre del parámetro
@@ -24,7 +24,7 @@ class Parameter:
         self.name = name
     
     # Método para establecer el valor del parámetro
-    def set_value(self, value: str | int | float):
+    def set_value(self, value: str | int | float | None):
         self.value = value
 
 class Parameter_Format:
@@ -81,7 +81,7 @@ class Parameter_Format:
         self.possible_values = possible_values
 
     # Método para obtener el valor de un parámetro en el formato correcto
-    def cast_parameter_value(self, parameter: Parameter) -> str | int | float:
+    def cast_parameter_value(self, parameter: Parameter) -> str | int | float | None:
         try:
             # Verifica si el nombre del parámetro coincide
             if parameter.get_name() != self.name:
@@ -103,6 +103,10 @@ class Parameter_Format:
             # Parámetro entero
             elif self.type == "i":
 
+                # Verifica si el valor es "NA"
+                if value == "NA":
+                    return None
+
                 value = int(value)
 
                 # Verifica si el valor está en los valores posibles
@@ -117,6 +121,10 @@ class Parameter_Format:
 
             # Parámetro flotante
             elif self.type == "f":
+
+                # Verifica si el valor es "NA"
+                if value == "NA":
+                    return None
 
                 value = float(value)
 
@@ -177,8 +185,20 @@ class Location_Format:
             value = parameter.get_value()
             parameter_located = ''
 
+            # Parámetro None o vacío
+            if value is None and parameter_format.get_type() in ['i', 'f']:
+
+                # Se obtienen los bordes de los valores posibles y la significancia
+                _, upper_bound = parameter_format.get_possible_values()
+                _, significance = self.location_caster
+                
+                # Se calcula el número de dígitos máximos
+                max_digits = len(str(int(upper_bound))) + significance
+                parameter_located = 'x' * max_digits
+                return parameter_located
+
             # Parámetro categorico u ordinal (c|o)
-            if parameter_format.get_value_type() in ['c', 'o']:
+            elif parameter_format.get_value_type() in ['c', 'o']:
 
                 # Verifica si el casteador de locación es un diccionario
                 if not isinstance(self.location_caster, dict):
@@ -218,11 +238,16 @@ class Location_Format:
                 subrange_index = int((value - lower_bound) // division)
                 calculated_value = lower_bound + subrange_index * division
 
-                # Aplica la significancia
-                if significance == 0:
-                    parameter_located = str(int(calculated_value)) # Convertir a entero si significance es 0
-                else:
-                    parameter_located = f"{calculated_value:.{significance}f}"  # Mantener decimales según significance
+                # Calcula la cantidad de dígitos máximos del borde superior
+                max_upper_digits = len(str(int(upper_bound)))
+                current_digits = len(str(int(calculated_value)))
+                difference = max_upper_digits - current_digits
+
+                # Multiplica el valor por 10^significance y convierte a entero
+                scaled_value = int(calculated_value * 10**significance)
+
+                # Convierte el valor escalado a cadena con ceros a la izquierda
+                parameter_located = difference * "0" + str(scaled_value)
 
                 return parameter_located
             else:
@@ -277,6 +302,10 @@ class Configuration:
     def get_quality(self) -> int | float:
         return self.quality
     
+    # Método para obtener el código de la locación de la configuración
+    def get_location_code(self) -> str:
+        return self.location_code
+    
     # Método para establecer el identificador de la configuración
     def set_id(self, id: int):
         self.id = id
@@ -300,6 +329,10 @@ class Configuration:
     # Método para establecer la calidad de la configuración
     def set_quality(self, quality: int | float):
         self.quality = quality
+    
+    # Método para establecer el código de la locación de la configuración
+    def set_location_code(self, location_code: str):
+        self.location_code = location_code
     
     # Método para añadir un parámetro a la configuración
     def add_parameter(self, parameter: Parameter):

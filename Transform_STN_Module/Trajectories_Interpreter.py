@@ -1,5 +1,5 @@
 import os, re, time
-from Transform_STN_Module import Parameter, Parameter_Format, Location_Format, Configuration
+from .Trajectories_Classes import Parameter, Parameter_Format, Location_Format, Configuration
 
 # Función para leer los archivos de una carpeta
 def read_trajectories_files_folder(
@@ -50,252 +50,255 @@ def trajectories_to_stn_format(
     Returns:
         List[str]: Lista de representaciones en formato STN para cada archivo.
     """
+    try:
+        # Validación de tamaños de listas
+        if len(parameters_format) == 0:
+            raise ValueError("La lista de formatos de parámetros no puede estar vacía.")
+        elif len(locations_format) == 0:
+            raise ValueError("La lista de formatos de locaciones no puede estar vacía.")
+        elif len(parameters_format) != len(locations_format):
+            raise ValueError("La cantidad de formatos de parámetros y locaciones debe ser la misma.")
 
-    # Validación de tamaños de listas
-    if len(parameters_format) == 0:
-        raise ValueError("La lista de formatos de parámetros no puede estar vacía.")
-    elif len(locations_format) == 0:
-        raise ValueError("La lista de formatos de locaciones no puede estar vacía.")
-    elif len(parameters_format) != len(locations_format):
-        raise ValueError("La cantidad de formatos de parámetros y locaciones debe ser la misma.")
+        # Validación de los formatos de los otros parámetros
+        if quality_type not in ['mean', 'best']:
+            raise ValueError(f"El tipo de calidad '{quality_type}' no es válido.")
+        elif significant_digits < 0:
+            raise ValueError("La cantidad de dígitos significativos no puede ser negativa.")
+        elif not isinstance(show_elites, bool):
+            raise ValueError("El valor de mostrar élites debe ser un valor booleano.")
 
-    # Validación de los formatos de los otros parámetros
-    if quality_type not in ['mean', 'best']:
-        raise ValueError(f"El tipo de calidad '{quality_type}' no es válido.")
-    elif significant_digits < 0:
-        raise ValueError("La cantidad de dígitos significativos no puede ser negativa.")
-    elif not isinstance(show_elites, bool):
-        raise ValueError("El valor de mostrar élites debe ser un valor booleano.")
+        # Leer los archivos desde la carpeta usando la función anterior
+        file_paths = read_trajectories_files_folder(folder_path, file_extension)
+        
+        # Lista resumida de locaciones de origen y destino por cada archivo e iteraciones, indicado el código de la locación
+        # Ejemplo: [archivo 1 [ iteración 1 [ (trayectoria 1), (trayectoria 2) ], iteración 2 [ (...) ], ...], archivo 2 [ (...), ...], ...]
+        files_iterations_trajectory_list = []
 
-    # Leer los archivos desde la carpeta usando la función anterior
-    file_paths = read_trajectories_files_folder(folder_path, file_extension)
-    
-    # Lista resumida de locaciones de origen y destino por cada archivo e iteraciones, indicado el código de la locación
-    # Ejemplo: [archivo 1 [ iteración 1 [ (trayectoria 1), (trayectoria 2) ], iteración 2 [ (...) ], ...], archivo 2 [ (...), ...], ...]
-    files_iterations_trajectory_list = []
+        # Expresión regular para capturar bloques entre paréntesis -> (...) (...) -> [ '...', '...' ]
+        trayectory_pattern = r'\((.*?)\)'
 
-    # Expresión regular para capturar bloques entre paréntesis -> (...) (...) -> [ '...', '...' ]
-    trayectory_pattern = r'\((.*?)\)'
+        # Recorre todos los archivos encontrados
+        for file_index, file_path in enumerate(file_paths):
 
-    # Recorre todos los archivos encontrados
-    for file_index, file_path in enumerate(file_paths):
+            # Leer contenido del archivo
+            with open(file_path, 'r') as file:
+                lines = file.readlines()
 
-        # Leer contenido del archivo
-        with open(file_path, 'r') as file:
-            lines = file.readlines()
+            # Lista de locaciones de origen y destino por cada iteración, indicado el código de la locación para un archivo
+            # Ejemplo: [ iteración 1 [ (trayectoria 1), (trayectoria 2) ], iteración 2 [ (...) ], ...]
+            iterations_trajectory_list = []
 
-        # Lista de locaciones de origen y destino por cada iteración, indicado el código de la locación para un archivo
-        # Ejemplo: [ iteración 1 [ (trayectoria 1), (trayectoria 2) ], iteración 2 [ (...) ], ...]
-        iterations_trajectory_list = []
+            # Lista de locaciones de origen y destino para una iteración
+            # Ejemplo: [ (trayectoria 1), (trayectoria 2) ]
+            trajectory_list = []
 
-        # Lista de locaciones de origen y destino para una iteración
-        # Ejemplo: [ (trayectoria 1), (trayectoria 2) ]
-        trajectory_list = []
+            # Contador de iteraciones
+            iteration = 1
 
-        # Contador de iteraciones
-        iteration = 1
+            print(f'Inicio del procesamiento del archivo {file_index + 1} de {len(file_paths)} lineas...')
 
-        print(f'Inicio del procesamiento del archivo {file_index + 1} de {len(file_paths)} lineas...')
+            start_time = time.time()
+
+            # Se procesa por cada linea del archivo
+            for line_index, line in enumerate(lines):
+
+                # Se omite la primera línea del archivo (encabezado)
+                if (line_index == 0): continue
+
+                # Se obtienen ambos bloques de configuraciones (origen y destino) y se almacenan en una lista como strings
+                trajectory_blocks = re.findall(trayectory_pattern, line)
+                if len(trajectory_blocks) != 2:
+                    raise ValueError(f"El archivo '{file_path}' no contiene dos bloques de trayectorias en la línea {line_index}.")
+
+                # Datos de la configuración de origen
+                origin_configuration = trajectory_blocks[0].split()
+                origin_length = len(origin_configuration)
+                if origin_length != 4 + len(parameters_format):
+                    raise ValueError(f"El archivo '{file_path}' no contiene la cantidad correcta de parámetros en la línea {line_index}.")
+
+                # Se obtiene la información de la configuración de origen
+                origin_id = int(origin_configuration[0])
+                origin_parameters_pre_cast = origin_configuration[1:origin_length - 3]
+                origin_parameters = []
+                for k, origin_parameter_value in enumerate(origin_parameters_pre_cast):
+                    origin_parameter_format = parameters_format[k]
+                    origin_parameter_name = origin_parameter_format.get_name()
+                    origin_parameter = Parameter(origin_parameter_name, origin_parameter_value)
+                    origin_parameter.set_value(origin_parameter_format.cast_parameter_value(origin_parameter))
+                    origin_parameters.append(origin_parameter)
+                origin_elite_state = origin_configuration[origin_length - 3]
+                origin_new_iteration = int(origin_configuration[origin_length - 2]) # Se asume que es la misma iteración que la configuración de destino
+                origin_quality = float(origin_configuration[origin_length - 1])
+
+                # Se actualiza la iteración si es necesario, actualizando la lista de trayectorias
+                if origin_new_iteration > iteration + 1:
+                    iteration += 1
+                    iterations_trajectory_list.append(trajectory_list)
+                    trajectory_list = []
+
+                # Se crea la configuración de origen
+                origin_configuration = Configuration(id=origin_id, run=file_index, iteration=iteration, parameters=origin_parameters, elite_state=origin_elite_state, quality=origin_quality, location_code='')
+
+                # Datos de la configuración de destino
+                destination_configuration = trajectory_blocks[1].split()
+                destination_length = len(destination_configuration)
+                if destination_length != 4 + len(parameters_format):
+                    raise ValueError(f"El archivo '{file_path}' no contiene la cantidad correcta de parámetros en la línea {line_index}.")
+
+                # Se obtiene la información de la configuración de destino
+                destination_id = int(destination_configuration[0])
+                destination_parameters_pre_cast = destination_configuration[1:destination_length - 3]
+                destination_parameters = []
+                for k, destination_parameter_value in enumerate(destination_parameters_pre_cast):
+                    destination_parameter_format = parameters_format[k]
+                    destination_parameter_name = destination_parameter_format.get_name()
+                    destination_parameter = Parameter(destination_parameter_name, destination_parameter_value)
+                    destination_parameter.set_value(destination_parameter_format.cast_parameter_value(destination_parameter))
+                    destination_parameters.append(destination_parameter)
+                destination_elite_state = destination_configuration[destination_length - 3]
+                destination_new_iteration = int(destination_configuration[destination_length - 2]) # Se asume que es la misma iteración que la configuración de origen
+                destination_quality = float(destination_configuration[destination_length - 1])
+
+                # Se crea la configuración de destino
+                destination_configuration = Configuration(id=destination_id, run=file_index, iteration=iteration + 1, parameters=destination_parameters, elite_state=destination_elite_state, quality=destination_quality, location_code='')
+
+                # Se añade la trayectoria a la lista
+                trajectory_list.append((origin_configuration, destination_configuration))
+
+            # Se añade la lista de trayectorias de la última iteración
+            iterations_trajectory_list.append(trajectory_list)
+
+            # Se añade la lista de trayectorias por archivo
+            files_iterations_trajectory_list.append(iterations_trajectory_list)
+
+        end_time = time.time()
+
+        print(f'Fin del procesamiento de los archivos. Tiempo total: {end_time - start_time} segundos.')
+
+        # --------------------------------------------------------------------------------------------------
+
+        print('Inicio del proceso de generación de locaciones...')
 
         start_time = time.time()
 
-        # Se procesa por cada linea del archivo
-        for line_index, line in enumerate(lines):
+        # Diccionario global de locaciones con las configuraciones que pertenecen a cada una de estas
+        # Ejemplo: { locación: [ Configuración, ... ], ... }
+        locations_dict = {}
 
-            # Se omite la primera línea del archivo (encabezado)
-            if (line_index == 0): continue
+        # Se recorre la lista de configuraciones por archivo y se generan los códigos de locaciones
+        for iterations_trajectory_list in files_iterations_trajectory_list:
+            for trajectory_list in iterations_trajectory_list:
+                for origin_configuration, destination_configuration in trajectory_list:
 
-            # TODO: Verificar que se separe bien la línea en dos bloques de trayectorias y se quiten los paréntesis
+                    # Se calcula el código de locación de origen
+                    origin_location_code = origin_configuration.generate_location_code(parameters_format, locations_format)
 
-            # Se obtienen ambos bloques de configuraciones (origen y destino) y se almacenan en una lista como strings
-            trajectory_blocks = re.findall(trayectory_pattern, line)
-            if len(trajectory_blocks) != 2:
-                raise ValueError(f"El archivo '{file_path}' no contiene dos bloques de trayectorias en la línea {line_index}.")
+                    # Se añade la configuración de origen al diccionario de locaciones
+                    if origin_location_code not in locations_dict:
+                        locations_dict[origin_location_code] = [origin_configuration]
+                    else:
+                        locations_dict[origin_location_code].append(origin_configuration)
 
-            # Datos de la configuración de origen
-            origin_configuration = trajectory_blocks[0].split()
-            origin_length = len(origin_configuration)
-            if origin_length != 4 + len(parameters_format):
-                raise ValueError(f"El archivo '{file_path}' no contiene la cantidad correcta de parámetros en la línea {line_index}.")
-            
-            # Se obtiene la información de la configuración de origen
-            origin_id = int(origin_configuration[0])
-            origin_parameters_pre_cast = origin_configuration[1:origin_length - 3]
-            origin_parameters = []
-            for k, origin_parameter in enumerate(origin_parameters_pre_cast):
-                param_format = parameters_format[k]
-                param_name = param_format.get_name()
-                param_value = param_format.cast_parameter_value(origin_parameter)
-                parameter = Parameter(param_name, param_value)
-                origin_parameters.append(parameter)
-            origin_eliteState = str(origin_configuration[origin_length - 3])
-            origin_new_iteration = int(origin_configuration[origin_length - 2]) # Se asume que es la misma iteración que la configuración de destino
-            origin_quality = float(origin_configuration[origin_length - 1])
+                    # Se calcula el código de locación de destino
+                    destination_location_code = destination_configuration.generate_location_code(parameters_format, locations_format)
 
-            # Se actualiza la iteración si es necesario, actualizando la lista de trayectorias
-            if origin_new_iteration > iteration + 1:
-                iteration += 1
-                iterations_trajectory_list.append(trajectory_list)
-                trajectory_list = []
+                    # Se añade la configuración de destino al diccionario de locaciones
+                    if destination_location_code not in locations_dict:
+                        locations_dict[destination_location_code] = [destination_configuration]
+                    else:
+                        locations_dict[destination_location_code].append(destination_configuration)
 
-            # Se crea la configuración de origen
-            origin_configuration = Configuration(id=origin_id, run=file_index, iteration=iteration, parameters=origin_parameters, eliteState=origin_eliteState, quality=origin_quality, location_code='')
+        end_time = time.time()
 
-            # Datos de la configuración de destino
-            destination_configuration = trajectory_blocks[1].split()
-            destination_length = len(destination_configuration)
-            if destination_length != 4 + len(parameters_format):
-                raise ValueError(f"El archivo '{file_path}' no contiene la cantidad correcta de parámetros en la línea {line_index}.")
+        print(f'Fin del proceso de generación de locaciones. Tiempo total: {end_time - start_time} segundos.')
 
-            # Se obtiene la información de la configuración de destino
-            destination_id = int(destination_configuration[0])
-            destination_parameters_pre_cast = destination_configuration[1:destination_length - 3]
-            destination_parameters = []
-            for k, destination_parameter in enumerate(destination_parameters_pre_cast):
-                param_format = parameters_format[k]
-                param_name = param_format.get_name()
-                param_value = param_format.cast_parameter_value(destination_parameter)
-                parameter = Parameter(param_name, param_value)
-                destination_parameters.append(parameter)
-            destination_eliteState = str(destination_configuration[destination_length - 3]) # Este valor no siempre es correcto
-            destination_new_iteration = int(destination_configuration[destination_length - 2]) # Se asume que es la misma iteración que la configuración de origen
-            destination_quality = float(destination_configuration[destination_length - 1])
+        # --------------------------------------------------------------------------------------------------
 
-            # Se crea la configuración de destino
-            destination_configuration = Configuration(id=destination_id, run=file_index, iteration=iteration + 1, parameters=destination_parameters, eliteState=destination_eliteState, quality=destination_quality, location_code='')
+        print('Inicio del proceso de cálculo de calidad de locaciones...')
 
-            # Se añade la trayectoria a la lista
-            trajectory_list.append((origin_configuration, destination_configuration))
+        start_time = time.time()
 
-        # Se añade la lista de trayectorias de la última iteración
-        iterations_trajectory_list.append(trajectory_list)
+        # Diccionario de las calidades de las locaciones calculadas
+        # Ejemplo: { locación: calidad, ... }
+        locations_quality_dict = {}
 
-        # Se añade la lista de trayectorias por archivo
-        files_iterations_trajectory_list.append(iterations_trajectory_list)
+        # Se calcula la calidad de las locaciones
+        for location_code, configurations in locations_dict.items():
 
-    end_time = time.time()
+            # Se calcula la calidad de la locación según el tipo de calidad
+            if quality_type == 'best': # Se toma la mejor calidad de las configuraciones en la locación
+                quality = max([configuration.get_quality() for configuration in configurations])
+            elif quality_type == 'mean': # Se toma la media de las calidades de las configuraciones en la locación
+                quality = sum([configuration.get_quality() for configuration in configurations]) / len(configurations)
+            else:
+                raise ValueError(f"El tipo de calidad '{quality_type}' no es válido.")
 
-    print(f'Fin del procesamiento de los archivos. Tiempo total: {end_time - start_time} segundos.')
+            locations_quality_dict[location_code] = quality
 
-    # --------------------------------------------------------------------------------------------------
+        end_time = time.time()
+        
+        print(f'Fin del proceso de cálculo de calidad de locaciones. Tiempo total: {end_time - start_time} segundos.')
+        
+        # --------------------------------------------------------------------------------------------------
+        
+        print('Inicio del proceso de generación del archivo en formato STN...')
+        
+        start_time = time.time()
 
-    print('Inicio del proceso de generación de locaciones...')
-
-    start_time = time.time()
-
-    # Diccionario global de locaciones con las configuraciones que pertenecen a cada una de estas
-    # Ejemplo: { locación: [ Configuración, ... ], ... }
-    locations_dict = {}
-
-    # Se recorre la lista de configuraciones por archivo y se generan los códigos de locaciones
-    for iterations_trajectory_list in files_iterations_trajectory_list:
-        for trajectory_list in iterations_trajectory_list:
-            for origin_configuration, destination_configuration in trajectory_list:
-
-                # Se calcula el código de locación de origen
-                origin_location_code = origin_configuration.generate_location_code(parameters_format, locations_format)
-
-                # Se añade la configuración de origen al diccionario de locaciones
-                if origin_location_code not in locations_dict:
-                    locations_dict[origin_location_code] = [origin_configuration]
-                else:
-                    locations_dict[origin_location_code].append(origin_configuration)
-
-                # Se calcula el código de locación de destino
-                destination_location_code = destination_configuration.generate_location_code(parameters_format, locations_format)
-
-                # Se añade la configuración de destino al diccionario de locaciones
-                if destination_location_code not in locations_dict:
-                    locations_dict[destination_location_code] = [destination_configuration]
-                else:
-                    locations_dict[destination_location_code].append(destination_configuration)
-
-    end_time = time.time()
-
-    print(f'Fin del proceso de generación de locaciones. Tiempo total: {end_time - start_time} segundos.')
-
-    # --------------------------------------------------------------------------------------------------
-
-    print('Inicio del proceso de cálculo de calidad de locaciones...')
-
-    start_time = time.time()
-
-    # Diccionario de las calidades de las locaciones calculadas
-    # Ejemplo: { locación: calidad, ... }
-    locations_quality_dict = {}
-
-    # Se calcula la calidad de las locaciones
-    for location_code, configurations in locations_dict.items():
-
-        # Se calcula la calidad de la locación según el tipo de calidad
-        if quality_type == 'best': # Se toma la mejor calidad de las configuraciones en la locación
-            quality = max([configuration.get_quality() for configuration in configurations])
-        elif quality_type == 'mean': # Se toma la media de las calidades de las configuraciones en la locación
-            quality = sum([configuration.get_quality() for configuration in configurations]) / len(configurations)
+        # Lista de archivos en formato STN
+        stn_format_files = []
+        if show_elites:
+            stn_format_files.append("Run Fitness1 Quality1 Location1 Elite1 Fitness2 Quality2 Location2 Elite2")
         else:
-            raise ValueError(f"El tipo de calidad '{quality_type}' no es válido.")
+            stn_format_files.append("Run Fitness1 Quality1 Location1 Fitness2 Quality2 Location2")
 
-        locations_quality_dict[location_code] = quality
+        # Se realiza la creación de la lista en formato STN
+        for file_index, iterations_trajectory_list in enumerate(files_iterations_trajectory_list):
+            for trajectory_list in iterations_trajectory_list:
+                for origin_configuration, destination_configuration in trajectory_list:
 
-    end_time = time.time()
-    
-    print(f'Fin del proceso de cálculo de calidad de locaciones. Tiempo total: {end_time - start_time} segundos.')
-    
-    # --------------------------------------------------------------------------------------------------
-    
-    print('Inicio del proceso de generación del archivo en formato STN...')
-    
-    start_time = time.time()
+                    # Se obtiene el índice de la run
+                    run = file_index + 1
 
-    # Lista de archivos en formato STN
-    stn_format_files = []
-    if show_elites:
-        stn_format_files.append("Run Fitness1 Quality1 Location1 Elite1 Fitness2 Quality2 Location2 Elite2")
-    else:
-        stn_format_files.append("Run Fitness1 Quality1 Location1 Fitness2 Quality2 Location2")
+                    # Se obtienen los códigos de locación de origen y destino
+                    origin_location_code = origin_configuration.get_location_code()
+                    destination_location_code = destination_configuration.get_location_code()
 
-    # Se realiza la creación de la lista en formato STN
-    for file_index, iterations_trajectory_list in enumerate(files_iterations_trajectory_list):
-        for trajectory_list in iterations_trajectory_list:
-            for origin_configuration, destination_configuration in trajectory_list:
+                    # Se obtienen las calidades de las locaciones (con la cantidad de dígitos significativos)
+                    if significant_digits == 0:
+                        quality1 = str(int(locations_quality_dict[origin_location_code]))
+                        quality2 = str(int(locations_quality_dict[destination_location_code]))
+                    else:
+                        quality1 = f'{locations_quality_dict[origin_location_code]:.{significant_digits}f}'
+                        quality2 = f'{locations_quality_dict[destination_location_code]:.{significant_digits}f}'
+                    
+                    # Se obtienen los estados élites de las configuraciones
+                    elite1 = 'T' if origin_configuration.get_elite_state() == "e" else 'F'
+                    elite2 = 'T' if destination_configuration.get_elite_state() == "e" else 'F'
 
-                # Se obtiene el índice de la run
-                run = file_index + 1
+                    # Se añade la línea al archivo en formato STN con o sin élites
+                    if show_elites:
+                        stn_format_files.append(f'{run} {quality1} {origin_location_code} {elite1} {quality2} {destination_location_code} {elite2}')
+                    else:
+                        stn_format_files.append(f'{run} {quality1} {origin_location_code} {quality2} {destination_location_code}')
+        
+        end_time = time.time()
 
-                # Se obtienen los códigos de locación de origen y destino
-                origin_location_code = origin_configuration.get_location_code()
-                destination_location_code = destination_configuration.get_location_code()
+        print(f'Fin del proceso de generación del archivo en formato STN. Tiempo total: {end_time - start_time} segundos.')
 
-                # Se obtienen las calidades de las locaciones (con la cantidad de dígitos significativos)
-                if significant_digits == 0:
-                    quality1 = str(int(locations_quality_dict[origin_location_code]))
-                    quality2 = str(int(locations_quality_dict[destination_location_code]))
-                else:
-                    quality1 = f'{locations_quality_dict[origin_location_code]:.{significant_digits}f}'
-                    quality2 = f'{locations_quality_dict[destination_location_code]:.{significant_digits}f}'
-                
-                # Se obtienen los estados élites de las configuraciones
-                elite1 = 'T' if origin_configuration.get_eliteState() == "e" else 'F'
-                elite2 = 'T' if destination_configuration.get_eliteState() == "e" else 'F'
+        # --------------------------------------------------------------------------------------------------
 
-                # Se añade la línea al archivo en formato STN con o sin élites
-                if show_elites:
-                    stn_format_files.append(f'{run} {quality1} {origin_location_code} {elite1} {quality2} {destination_location_code} {elite2}')
-                else:
-                    stn_format_files.append(f'{run} {quality1} {origin_location_code} {quality2} {destination_location_code}')
-    
-    end_time = time.time()
+        # Escritura del archivo con el nombre indicado
+        with open(output_file_path, 'w') as file:
+            for line in stn_format_files:
+                file.write(line + '\n')
 
-    print(f'Fin del proceso de generación del archivo en formato STN. Tiempo total: {end_time - start_time} segundos.')
-
-    # --------------------------------------------------------------------------------------------------
-
-    # Escritura del archivo con el nombre indicado
-    with open(output_file_path, 'w') as file:
-        for line in stn_format_files:
-            file.write(line + '\n')
-
-    return stn_format_files
+        return stn_format_files
+    except Exception as e:
+        print(f'Error en la conversión de las trayectorias a formato STN: {e}')
+        return []
+    finally:
+        print('Fin del proceso de conversión de las trayectorias a formato STN.')
 
 # TODO: Aprovechar la información adicional recopilada en la ejecución para obtener otras cosas
 
