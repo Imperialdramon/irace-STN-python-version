@@ -70,12 +70,16 @@ def trajectories_to_stn_format(
         # Leer los archivos desde la carpeta usando la función anterior
         file_paths = read_trajectories_files_folder(folder_path, file_extension)
         
-        # Lista resumida de locaciones de origen y destino por cada archivo e iteraciones, indicado el código de la locación
+        # Lista resumida de configuraciones de origen y destino por cada archivo e iteraciones, indicado el código de la locación
         # Ejemplo: [archivo 1 [ iteración 1 [ (trayectoria 1), (trayectoria 2) ], iteración 2 [ (...) ], ...], archivo 2 [ (...), ...], ...]
         files_iterations_trajectory_list = []
+        
+        # Lista resumida de las id de las configuraciones élites por cada archivo e iteración
+        # Ejemplo: [archivo 1 [ iteración 1 [ élite 1, élite 2, ... ], iteración 2 [ élite1, ... ], ...], archivo 2 [ (...), ...], ...]
+        files_iterations_elites_list = []
 
         # Expresión regular para capturar bloques entre paréntesis -> (...) (...) -> [ '...', '...' ]
-        trayectory_pattern = r'\((.*?)\)'
+        # trayectory_pattern = r'\((.*?)\)'
 
         # Recorre todos los archivos encontrados
         for file_index, file_path in enumerate(file_paths):
@@ -88,7 +92,7 @@ def trajectories_to_stn_format(
             # Ejemplo: [ iteración 1 [ (trayectoria 1), (trayectoria 2) ], iteración 2 [ (...) ], ...]
             iterations_trajectory_list = []
 
-            # Lista de locaciones de origen y destino para una iteración
+            # Lista de configuraciones de origen y destino para una iteración
             # Ejemplo: [ (trayectoria 1), (trayectoria 2) ]
             trajectory_list = []
 
@@ -106,7 +110,8 @@ def trajectories_to_stn_format(
                 if (line_index == 0): continue
 
                 # Se obtienen ambos bloques de configuraciones (origen y destino) y se almacenan en una lista como strings
-                trajectory_blocks = re.findall(trayectory_pattern, line)
+                # trajectory_blocks = re.findall(trayectory_pattern, line)
+                trajectory_blocks = line.split('|')
                 if len(trajectory_blocks) != 2:
                     raise ValueError(f"El archivo '{file_path}' no contiene dos bloques de trayectorias en la línea {line_index}.")
 
@@ -138,7 +143,7 @@ def trajectories_to_stn_format(
 
                 # Se crea la configuración de origen
                 origin_configuration = Configuration(id=origin_id, run=file_index, iteration=iteration, parameters=origin_parameters, elite_state=origin_elite_state, quality=origin_quality, location_code='')
-
+                
                 # Datos de la configuración de destino
                 destination_configuration = trajectory_blocks[1].split()
                 destination_length = len(destination_configuration)
@@ -165,8 +170,14 @@ def trajectories_to_stn_format(
                 # Se añade la trayectoria a la lista
                 trajectory_list.append((origin_configuration, destination_configuration))
 
+            # Se identifica como élites las configuraciones de destino de la última iteración
+            for _, destination_configuration in trajectory_list:
+                destination_configuration.set_elite_state('e')
+
             # Se añade la lista de trayectorias de la última iteración
             iterations_trajectory_list.append(trajectory_list)
+
+            iteration += 1
 
             # Se añade la lista de trayectorias por archivo
             files_iterations_trajectory_list.append(iterations_trajectory_list)
@@ -218,8 +229,8 @@ def trajectories_to_stn_format(
 
         start_time = time.time()
 
-        # Diccionario de las calidades de las locaciones calculadas
-        # Ejemplo: { locación: calidad, ... }
+        # Diccionario de las calidades y estado de élite de las locaciones calculadas
+        # Ejemplo: { locación: [calidad, estado elite], ... }
         locations_quality_dict = {}
 
         # Se calcula la calidad de las locaciones
@@ -233,7 +244,10 @@ def trajectories_to_stn_format(
             else:
                 raise ValueError(f"El tipo de calidad '{quality_type}' no es válido.")
 
-            locations_quality_dict[location_code] = quality
+            # Se revisa si alguna de las configuraciones es élite
+            elite = 'e' if any([configuration.get_elite_state() == 'e' for configuration in configurations]) else 'ne'
+
+            locations_quality_dict[location_code] = [quality, elite]
 
         end_time = time.time()
         
@@ -266,15 +280,15 @@ def trajectories_to_stn_format(
 
                     # Se obtienen las calidades de las locaciones (con la cantidad de dígitos significativos)
                     if significant_digits == 0:
-                        quality1 = str(int(locations_quality_dict[origin_location_code]))
-                        quality2 = str(int(locations_quality_dict[destination_location_code]))
+                        quality1 = str(int(locations_quality_dict[origin_location_code][0]))
+                        quality2 = str(int(locations_quality_dict[destination_location_code][0]))
                     else:
-                        quality1 = f'{locations_quality_dict[origin_location_code]:.{significant_digits}f}'
-                        quality2 = f'{locations_quality_dict[destination_location_code]:.{significant_digits}f}'
+                        quality1 = f'{locations_quality_dict[origin_location_code][0]:.{significant_digits}f}'
+                        quality2 = f'{locations_quality_dict[destination_location_code][0]:.{significant_digits}f}'
                     
                     # Se obtienen los estados élites de las configuraciones
-                    elite1 = 'T' if origin_configuration.get_elite_state() == "e" else 'F'
-                    elite2 = 'T' if destination_configuration.get_elite_state() == "e" else 'F'
+                    elite1 = 'T' if locations_quality_dict[origin_location_code][1] == "e" else 'F'
+                    elite2 = 'T' if locations_quality_dict[destination_location_code][1] == "e" else 'F'
 
                     # Se añade la línea al archivo en formato STN con o sin élites
                     if show_elites:
