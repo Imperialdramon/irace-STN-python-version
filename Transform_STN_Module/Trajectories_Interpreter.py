@@ -136,13 +136,13 @@ def trajectories_to_stn_format(
                 origin_quality = float(origin_configuration[origin_length - 1])
 
                 # Se actualiza la iteración si es necesario, actualizando la lista de trayectorias
-                if origin_new_iteration > iteration + 1:
+                if origin_new_iteration > iteration:
                     iteration += 1
                     iterations_trajectory_list.append(trajectory_list)
                     trajectory_list = []
 
                 # Se crea la configuración de origen
-                origin_configuration = Configuration(id=origin_id, run=file_index, iteration=iteration, parameters=origin_parameters, elite_state=origin_elite_state, quality=origin_quality, location_code='')
+                origin_configuration = Configuration(id=origin_id, run=file_index, iteration=origin_new_iteration, parameters=origin_parameters, elite_state=origin_elite_state, quality=origin_quality, location_code='')
                 
                 # Datos de la configuración de destino
                 destination_configuration = trajectory_blocks[1].split()
@@ -161,11 +161,11 @@ def trajectories_to_stn_format(
                     destination_parameter.set_value(destination_parameter_format.cast_parameter_value(destination_parameter))
                     destination_parameters.append(destination_parameter)
                 destination_elite_state = destination_configuration[destination_length - 3]
-                destination_new_iteration = int(destination_configuration[destination_length - 2]) # Se asume que es la misma iteración que la configuración de origen
+                destination_new_iteration = int(destination_configuration[destination_length - 2])
                 destination_quality = float(destination_configuration[destination_length - 1])
 
                 # Se crea la configuración de destino
-                destination_configuration = Configuration(id=destination_id, run=file_index, iteration=iteration + 1, parameters=destination_parameters, elite_state=destination_elite_state, quality=destination_quality, location_code='')
+                destination_configuration = Configuration(id=destination_id, run=file_index, iteration=destination_new_iteration, parameters=destination_parameters, elite_state=destination_elite_state, quality=destination_quality, location_code='')
 
                 # Se añade la trayectoria a la lista
                 trajectory_list.append((origin_configuration, destination_configuration))
