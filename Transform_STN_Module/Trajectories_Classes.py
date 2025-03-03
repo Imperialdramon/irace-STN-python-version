@@ -26,6 +26,18 @@ class Parameter:
     # Método para establecer el valor del parámetro
     def set_value(self, value: str | int | float | None):
         self.value = value
+    
+    # Método para obtener la representación de la clase como string
+    def to_str(self, significant_digits: int = 2) -> str:
+        if self.value is None:
+            return f"NA"
+        elif isinstance(self.value, str):
+            return f"{self.value}"
+        elif isinstance(self.value, int):
+            return f"{self.value}"
+        elif isinstance(self.value, float):
+            return f"{self.value:.{significant_digits}f}"
+        return f"{self.value}"
 
 class Parameter_Format:
     # Constructor de la clase
@@ -238,13 +250,14 @@ class Location_Format:
                 subrange_index = int((value - lower_bound) // division)
                 calculated_value = lower_bound + subrange_index * division
 
-                # Calcula la cantidad de dígitos máximos del borde superior
-                max_upper_digits = len(str(int(upper_bound)))
-                current_digits = len(str(int(calculated_value)))
-                difference = max_upper_digits - current_digits
-
                 # Multiplica el valor por 10^significance y convierte a entero
-                scaled_value = int(calculated_value * 10**significance)
+                scaled_value = int(calculated_value * (10**significance))
+                max_upper_scaled = int(upper_bound * (10**significance))
+                
+                # Calcula la cantidad de dígitos máximos del borde superior
+                current_digits = len(str(scaled_value))
+                max_upper_digits = len(str(max_upper_scaled))
+                difference = max_upper_digits - current_digits
 
                 # Convierte el valor escalado a cadena con ceros a la izquierda
                 parameter_located = difference * "0" + str(scaled_value)
@@ -339,8 +352,15 @@ class Configuration:
         self.parameters.append(parameter)
     
     # Método para obtener la representación de la clase como string
-    def __repr__(self):
-        return f"ID: {self.id} - Run: {self.run} - Iteration: {self.iteration} - Parameters: {self.parameters} - Quality: {self.quality}"
+    def to_str(self, parameters_format: list[Parameter_Format], locations_format: list[Location_Format]) -> str:
+        parameters_str_format = []
+        for i, parameter in enumerate(self.parameters):
+            significant_digits = 2
+            if parameters_format[i].get_type() == 'f':
+                significant_digits = locations_format[i].get_location_caster()[1]
+            parameters_str_format.append(parameter.to_str(significant_digits))
+        parameters = ':'.join(parameters_str_format)
+        return f"{self.id}-{self.run}-{self.iteration}-{self.quality}-{parameters}"
     
     # Método para generar el código de la locación de la configuración
     def generate_location_code(self, parameters_format: list[Parameter_Format], locations_format: list[Location_Format]) -> str:

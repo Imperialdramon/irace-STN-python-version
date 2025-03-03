@@ -33,7 +33,9 @@ def trajectories_to_stn_format(
     locations_format: list[ Location_Format ],
     quality_type: str,
     significant_digits: int,
-    show_elites: bool
+    show_elites: bool,
+    show_iterations: bool = False,
+    show_configurations: bool = False
 ) -> list[str]:
     """
     Convierte los archivos de trayectorias de irace en formato STN con vecindades.
@@ -44,9 +46,11 @@ def trajectories_to_stn_format(
         output_file_path (str): Ruta del archivo de salida en formato STN.
         parameters_format (list[]) : Formato de los parámetros del algoritmo, donde cada elemento contiene el diccionario con el nombre del parámetro y una lista de sus valores posibles. Si es un valor de tipo entero o flotante, contendrá un rango de valores.
         locations_format (list[]) : Formato de las locaciones del algoritmo, donde cada elemento contiene el diccionario con el nombre de la locación y una lista de sus valores posibles. Si es un valor de tipo entero o flotante, contendrá un rango de valores.
-        quality_type (str) : Tipo de calidad a considerar para las locaciones, puede ser 'mean' para la media de las calidades de las configuraciones en una locación o 'best' para la mejor calidad de las configuraciones en una locación.
+        quality_type (str) : Tipo de calidad a considerar para las locaciones, puede ser 'mean' para la media de las calidades de las configuraciones en una locación o 'min' para la mejor calidad de las configuraciones en una locación o 'max' para la peor calidad de las configuraciones en una locación.
         significant_digits (int) : Cantidad de dígitos significativos a considerar para los valores de los parámetros y la calidad de las configuraciones.
         show_elites (bool) : Indica si se deben mostrar las configuraciones élites en el archivo STN.
+        show_iterations (bool) : Indica si se deben mostrar los tipos de iteraciones en el archivo STN (inicio, centro, fin).
+        show_configurations (bool) : Indica si se deben mostrar las configuraciones en el archivo STN.
     Returns:
         List[str]: Lista de representaciones en formato STN para cada archivo.
     """
@@ -60,7 +64,7 @@ def trajectories_to_stn_format(
             raise ValueError("La cantidad de formatos de parámetros y locaciones debe ser la misma.")
 
         # Validación de los formatos de los otros parámetros
-        if quality_type not in ['mean', 'best']:
+        if quality_type not in ['mean', 'min', 'max']:
             raise ValueError(f"El tipo de calidad '{quality_type}' no es válido.")
         elif significant_digits < 0:
             raise ValueError("La cantidad de dígitos significativos no puede ser negativa.")
@@ -73,13 +77,6 @@ def trajectories_to_stn_format(
         # Lista resumida de configuraciones de origen y destino por cada archivo e iteraciones, indicado el código de la locación
         # Ejemplo: [archivo 1 [ iteración 1 [ (trayectoria 1), (trayectoria 2) ], iteración 2 [ (...) ], ...], archivo 2 [ (...), ...], ...]
         files_iterations_trajectory_list = []
-        
-        # Lista resumida de las id de las configuraciones élites por cada archivo e iteración
-        # Ejemplo: [archivo 1 [ iteración 1 [ élite 1, élite 2, ... ], iteración 2 [ élite1, ... ], ...], archivo 2 [ (...), ...], ...]
-        files_iterations_elites_list = []
-
-        # Expresión regular para capturar bloques entre paréntesis -> (...) (...) -> [ '...', '...' ]
-        # trayectory_pattern = r'\((.*?)\)'
 
         # Recorre todos los archivos encontrados
         for file_index, file_path in enumerate(file_paths):
@@ -99,7 +96,7 @@ def trajectories_to_stn_format(
             # Contador de iteraciones
             iteration = 1
 
-            print(f'Inicio del procesamiento del archivo {file_index + 1} de {len(file_paths)} lineas...')
+            print(f'Inicio del procesamiento del archivo {file_index + 1} ({file_path}) de {len(lines)} lineas...')
 
             start_time = time.time()
 
@@ -110,7 +107,6 @@ def trajectories_to_stn_format(
                 if (line_index == 0): continue
 
                 # Se obtienen ambos bloques de configuraciones (origen y destino) y se almacenan en una lista como strings
-                # trajectory_blocks = re.findall(trayectory_pattern, line)
                 trajectory_blocks = line.split('|')
                 if len(trajectory_blocks) != 2:
                     raise ValueError(f"El archivo '{file_path}' no contiene dos bloques de trayectorias en la línea {line_index}.")
@@ -132,7 +128,7 @@ def trajectories_to_stn_format(
                     origin_parameter.set_value(origin_parameter_format.cast_parameter_value(origin_parameter))
                     origin_parameters.append(origin_parameter)
                 origin_elite_state = origin_configuration[origin_length - 3]
-                origin_new_iteration = int(origin_configuration[origin_length - 2]) # Se asume que es la misma iteración que la configuración de destino
+                origin_new_iteration = int(origin_configuration[origin_length - 2])
                 origin_quality = float(origin_configuration[origin_length - 1])
 
                 # Se actualiza la iteración si es necesario, actualizando la lista de trayectorias
@@ -237,7 +233,9 @@ def trajectories_to_stn_format(
         for location_code, configurations in locations_dict.items():
 
             # Se calcula la calidad de la locación según el tipo de calidad
-            if quality_type == 'best': # Se toma la mejor calidad de las configuraciones en la locación
+            if quality_type == 'min': # Se toma el minimo de las calidades de las configuraciones en la locación
+                quality = min([configuration.get_quality() for configuration in configurations])
+            elif quality_type == 'max': # Se toma el máximo de las calidades de las configuraciones en la locación
                 quality = max([configuration.get_quality() for configuration in configurations])
             elif quality_type == 'mean': # Se toma la media de las calidades de las configuraciones en la locación
                 quality = sum([configuration.get_quality() for configuration in configurations]) / len(configurations)
@@ -259,12 +257,28 @@ def trajectories_to_stn_format(
         
         start_time = time.time()
 
-        # Lista de archivos en formato STN
-        stn_format_files = []
+        # Lista de encabezados en formato STN
+        stn_header_list = ["Fitness", "Solution"]
+        
+        # Se añade la lista de élites si es necesario
         if show_elites:
-            stn_format_files.append("Run Fitness1 Solution1 Elite1 Fitness2 Solution2 Elite2")
-        else:
-            stn_format_files.append("Run Fitness1 Solution1 Fitness2 Solution2")
+            stn_header_list.append("Elite")
+            
+        # Se añade la lista de tipos de iteraciones si es necesario
+        if show_iterations:
+            stn_header_list.append("Iteration")
+        
+        # Se añade la lista de configuraciones si es necesario
+        if show_configurations:
+            stn_header_list.append("Data")
+        
+        stn_base_header = "Run"
+        for i in range(2):
+            for stn_format in stn_header_list:
+                stn_base_header += f" {stn_format}{i + 1}"
+        
+        # Lista de archivos en formato STN
+        stn_format_files = [stn_base_header]
 
         # Se realiza la creación de la lista en formato STN
         for file_index, iterations_trajectory_list in enumerate(files_iterations_trajectory_list):
@@ -272,7 +286,7 @@ def trajectories_to_stn_format(
                 for origin_configuration, destination_configuration in trajectory_list:
 
                     # Se obtiene el índice de la run
-                    run = file_index + 1
+                    run = str(file_index + 1)
 
                     # Se obtienen los códigos de locación de origen y destino
                     origin_location_code = origin_configuration.get_location_code()
@@ -285,17 +299,44 @@ def trajectories_to_stn_format(
                     else:
                         quality1 = f'{locations_quality_dict[origin_location_code][0]:.{significant_digits}f}'
                         quality2 = f'{locations_quality_dict[destination_location_code][0]:.{significant_digits}f}'
+
+                    # Listas de origen y destino en formato STN
+                    stn_line_origin = [quality1, origin_location_code]
+                    stn_line_destination = [quality2, destination_location_code]
+
+                    # Se añade la lista de élites si es necesario
+                    if show_elites:
+
+                        # Se obtienen los estados élites de las configuraciones
+                        elite1 = 'T' if locations_quality_dict[origin_location_code][1] == "e" else 'F'
+                        elite2 = 'T' if locations_quality_dict[destination_location_code][1] == "e" else 'F'
+
+                        stn_line_origin.append(elite1)
+                        stn_line_destination.append(elite2)
                     
-                    # Se obtienen los estados élites de las configuraciones
-                    elite1 = 'T' if locations_quality_dict[origin_location_code][1] == "e" else 'F'
-                    elite2 = 'T' if locations_quality_dict[destination_location_code][1] == "e" else 'F'
+                    # Se añade la lista de tipos de iteraciones si es necesario
+                    if show_iterations:
+
+                        # Se obtienen los tipos de iteraciones de las configuraciones
+                        iteration1 = str(origin_configuration.get_iteration())
+                        iteration2 = str(destination_configuration.get_iteration())
+
+                        stn_line_origin.append(iteration1)
+                        stn_line_destination.append(iteration2)
+
+                    # Se añade la lista de configuraciones si es necesario
+                    if show_configurations:
+
+                        # Se obtiene la información de las configuraciones
+                        origin_parameters_str = origin_configuration.to_str(parameters_format, locations_format)
+                        destination_parameters_str = destination_configuration.to_str(parameters_format, locations_format)
+
+                        stn_line_origin.append(origin_parameters_str)
+                        stn_line_destination.append(destination_parameters_str)
 
                     # Se añade la línea al archivo en formato STN con o sin élites
-                    if show_elites:
-                        stn_format_files.append(f'{run} {quality1} {origin_location_code} {elite1} {quality2} {destination_location_code} {elite2}')
-                    else:
-                        stn_format_files.append(f'{run} {quality1} {origin_location_code} {quality2} {destination_location_code}')
-        
+                    stn_format_files.append(f'{run} {" ".join(stn_line_origin)} {" ".join(stn_line_destination)}')
+
         end_time = time.time()
 
         print(f'Fin del proceso de generación del archivo en formato STN. Tiempo total: {end_time - start_time} segundos.')
@@ -313,8 +354,3 @@ def trajectories_to_stn_format(
         return []
     finally:
         print('Fin del proceso de conversión de las trayectorias a formato STN.')
-
-# TODO: Aprovechar la información adicional recopilada en la ejecución para obtener otras cosas
-
-# TODO: Modificar repo con la generación de archivos de trayectorias para que almacenen la información de las élites bien
-# TODO: Cambiar el formato de las filas del archivo de trayectorias separando por un valor de tipo | o similar (por simplicidad)
